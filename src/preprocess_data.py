@@ -2,64 +2,37 @@ import emoji
 import re
 from underthesea import text_normalize, word_tokenize
 
-def preprocess_comments(comments, abbr, emoji_vi):
+def preprocess_comments(comments, rdrsegmenter, abbr, emoji_vi):
     if not comments:
         return
 
     for cmt in comments:
-        cmt['cmt_content'] = preprocess_text(cmt['cmt_content'], abbr, emoji_vi)
-        preprocess_comments(cmt['comments'], abbr, emoji_vi)
+        cmt['cmt_content'] = preprocess_text(cmt['cmt_content'], rdrsegmenter, abbr, emoji_vi)
+        preprocess_comments(cmt['comments'], rdrsegmenter,abbr, emoji_vi)
 
-def replace_abbr_and_emoji(text, abbr, emoji_vi):
-    text_with_emoji_name = emoji.demojize(text)
+def replace_emoji_and_abbr(text, abbr, emoji_vi):
+    pattern = r':[^:\s]+:|[\w]+|[^\w\s]'
+    words = re.findall(pattern, text)
 
-    pattern = r':[^:]+:|[\w]+|[^\w\s]'
-    words = re.findall(pattern, text_with_emoji_name)
-
-    for i, word in enumerate(words):
-        if word in abbr:
-            words[i] = abbr[word]
-        elif word in emoji_vi:
-            words[i] = f'[{emoji_vi[word]}]'
-    return ' '.join(words)
-
-def preprocess_text(text, abbr, emoji_vi):
-    text_with_emoji_name = emoji.demojize(text)
-    nor_text = text_normalize(text_with_emoji_name)
-
-    print('after nor')
-    print(nor_text)
-    print()
-
-    pattern = r': [^:]+ :|[\w]+|[^\w\s]'
-    words = re.findall(pattern, nor_text)
-    print('after split')
-    print(words)
-    print()
-
-    for i, word in enumerate(words):
-        if word in abbr:
-            words[i] = abbr[word]
-
-    text_after_segment = word_tokenize(' '.join(words), format='text')
-    print('after tokenize')
-    print(text_after_segment)
-    print()
-
-    pattern = r': [^:]+ :|[\w]+|[^\w\s]'
-    words = re.findall(pattern, text_after_segment)
-    print('after split')
-    print(words)
-    print()
-
-    for i, word in enumerate(words):
-        if word.startswith(':') and word.endswith(':'):
-            word = re.sub(r'\s+', '', word)
-            emoji_vi_name = word_tokenize(emoji_vi[word], format='text')
-            words[i] = f'[ {emoji_vi_name} ]'
-
-    print('after replay emoji')
-    print(' '.join(words))
-    print()
+    for i, w in enumerate(words):
+        if w in abbr:
+            words[i] = abbr[w]
+        elif len(w) > 2 and w.startswith(':') and w.endswith(':'):
+            emoji_vi_name = emoji_vi.get(w, '')
+            if emoji_vi_name:
+                words[i] = f'[{emoji_vi_name}]'
+            else:
+                words[i] = ''
 
     return ' '.join(words)
+
+def preprocess_text(text, rdrsegmenter, abbr, emoji_vi):
+    text_with_name_emoji = emoji.demojize(text)
+
+    text_after_replace = replace_emoji_and_abbr(text_with_name_emoji, abbr, emoji_vi)
+
+    normalized_text = text_normalize(text_after_replace)
+
+    segmented_text = ' '.join(rdrsegmenter.word_segment(normalized_text))
+
+    return segmented_text
